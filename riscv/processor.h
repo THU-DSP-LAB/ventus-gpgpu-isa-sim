@@ -47,7 +47,7 @@ struct simt_stack_entry_t
 //   std::printf("is_part, rPC, r_mask, else_pc, else_mask, pair\n");
 //   std::printf("%d, %s, %d, %s, %d, %d", is_part, rPC, r_mask, else_pc, else_mask, pair);
 // }
-
+#define NO_PC 0
 class simt_stack_t {
   public:
     //void print(simt_stack_entry_t &entry); 有必要再加
@@ -68,7 +68,8 @@ class simt_stack_t {
     std::stack<simt_stack_entry_t> _stack;
     reg_t npc;
     uint64_t mask;
-}
+};
+
 void simt_stack_t::pop_join(reg_t r_pc){
   //弹出汇合点信息,pop
   if(_stack.top().is_part==1){
@@ -89,7 +90,7 @@ void simt_stack_t::push_branch
     //不用执行else，pair=1和is_part=1
     //pair:else路径掩码是否为0
     //is_part选择输出栈顶 0:else路径信息, 1:汇合点
-    simt_stack_entry_t push_stack = {1, r_pc, r_mask, else_pc, else_mask, 1 };
+    simt_stack_entry_t push_stack = {1, NO_PC, r_mask, else_pc, else_mask, 1 };
     _stack.push(push_stack);
     npc=if_pc;
     mask=if_mask;
@@ -97,14 +98,14 @@ void simt_stack_t::push_branch
   else if(if_mask == 0){
     //不用执行if但要执行else，pair=0和is_part=1
     //is_part选择输出栈顶 0:else路径信息, 1:汇合点
-    simt_stack_entry_t push_stack = {0, r_pc, r_mask, else_pc, else_mask, 1 };
+    simt_stack_entry_t push_stack = {0, NO_PC, r_mask, else_pc, else_mask, 1 };
     _stack.push(push_stack);
     npc=else_pc;
     mask=else_mask;
   }
   else{
     //if,else 都要执行
-    simt_stack_entry_t push_stack = {0, r_pc, r_mask, else_pc, else_mask, 0 };
+    simt_stack_entry_t push_stack = {0, NO_PC, r_mask, else_pc, else_mask, 0 };
     _stack.push(push_stack);
     npc=if_pc;
     mask=if_mask;
