@@ -22,7 +22,6 @@
 //怕重复定义了，先写在这
 #include <stack>
 #include <stdio.h>
-//#include <bitset>
 
 class processor_t;
 class mmu_t;
@@ -34,19 +33,6 @@ class disassembler_t;
 
 
 reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc);
-
-//warp scheduler for warp and barrier
-class warp_schedule
-  {
-    public:
-      void init_warp(std::string gpgpuarch);
-      int warp_number;
-      int thread_number;
-      std::vector<int> barriers;
-      bool is_all_true;
-      int barrier_counter = 0;
-
-  };
 
 struct insn_desc_t  //mask
 {
@@ -492,17 +478,14 @@ public:
 
   class gpgpu_unit_t{
     private:
-      warp_schedule *w;
       processor_t *p;
       // custom csr
       csr_t_p numw;
       csr_t_p numt;
       csr_t_p tid;
-      csr_t_p wid;//warp id
+      csr_t_p wid;
       csr_t_p gds;
       csr_t_p lds;
-
-      int warp_id;
 
     public:
       // clear simt-stack, map and intialize csr
@@ -514,22 +497,22 @@ public:
         wid(0),
         gds(0),
         lds(0),
-        simt_stack() {}
+        simt_stack() {
+      }
 
       void reset(processor_t *const proc);
-      void set_warp(warp_schedule *w);
-      void set_barrier_1();
-      void set_barrier_0();
-      bool get_barrier();
 
-      void init_warp(uint64_t _numw, uint64_t _numt, uint64_t _tid, uint64_t _wid, uint64_t _gds, uint64_t _lds, int warp_i) {
+      void init_warp(uint64_t _numw, uint64_t _numt, uint64_t _tid, uint64_t _wid, uint64_t _gds, uint64_t _lds) {
         numw->write(_numw);
         numt->write(_numt);
         tid->write(_tid);
         wid->write(_wid);
         gds->write(_gds);
         lds->write(_lds);
-        warp_id = warp_i;
+        
+        // init simt-stack
+        simt_stack.init_mask(_numt);
+
       }
 
       struct simt_stack_entry_t
@@ -543,11 +526,12 @@ public:
         simt_stack_entry_t() :is_part(), r_pc(), r_mask(), else_pc(), else_mask(), pair(){}
         simt_stack_entry_t(bool a, reg_t b, uint64_t c, reg_t d, uint64_t e, bool f) :is_part(a), r_pc(b), r_mask(c), else_pc(d), else_mask(e), pair(f){}
         void dump() {
-          std::cout << is_part << "\t"
-                    << std::hex << std::setfill ('0') << std::setw(16) << r_pc << "\t" 
-                    << std::hex << std::setfill ('0') << std::setw(16) << r_mask << "\t" 
-                    << std::hex << std::setfill ('0') << std::setw(16) << else_pc << "\t" 
-                    << else_mask << pair << std::endl;
+          std::cout << "is_part: " << is_part << " "
+                    << "r_pc: " << std::hex << std::setw(16) << std::setfill('0') << r_pc << " " 
+                    << "r_mask: " << std::hex << std::setw(16) << std::setfill('0') << r_mask << " " 
+                    << "else_pc: " << std::hex << std::setw(16) << std::setfill('0') << else_pc << " " 
+                    << "else_mask: " << std::hex << std::setw(16) << std::setfill('0') << else_mask << " " 
+                    << "pair: " << pair << std::endl;
         }
       };
 
@@ -573,16 +557,29 @@ public:
             std::cout << "current mask:\t" << std::hex << std::setw(16) << std::setfill('0') << mask << std::endl;
             std::cout << "current npc:\t" << std::hex << std::setw(16) << std::setfill('0') << npc << std::endl;
             std::cout << "stack size: " << _stack.size() << std::endl;
-            if(!_stack.empty()) std::cout << "is_part\tr_pc\tr_mask\telse_pc\telse_mask\n";
             for(auto it = _stack.begin(); it != _stack.end(); it ++) {
               it->dump();
             }
+          }
+
+          void init_mask(int numt) {
+            mask_width = numt;
+            width_mask = 1;
+            for(int i = 0; i< numt - 1; i ++) 
+              width_mask = width_mask | (width_mask << 1);
+            mask = 0xffffffffffffffff & width_mask;
           }
 
         private:
           std::vector<simt_stack_entry_t> _stack;
           reg_t npc;
           uint64_t mask;
+
+          int mask_width;
+          uint64_t width_mask;
+
+          // bool all_one(uint64_t val) { return (val & width_mask) == width_mask; }
+          bool all_zero(uint64_t val) { return (val & width_mask) == 0; }
       };
 
       simt_stack_t simt_stack;

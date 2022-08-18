@@ -1099,22 +1099,16 @@ void processor_t::gpgpu_unit_t::reset(processor_t *const proc)
 
 void processor_t::gpgpu_unit_t::simt_stack_t::pop_join(reg_t r_pc)
 {
-  //else不用執行，if下來直接匯合點
-  if(_stack.back().pair == 1){
-    npc = r_pc;
-    mask = _stack.back().r_mask;
-    _stack.pop_back();
-  }
   //弹出汇合点信息
-  else if(_stack.back().is_part == 1){
+  if(_stack.back().is_part == 1){
     npc = r_pc;
-    mask = _stack.back().r_mask;
+    mask = _stack.back().r_mask & width_mask;
     _stack.pop_back();
   }
   //弹出else分支信息
   else{
     npc = _stack.back().else_pc;
-    mask = _stack.back().else_mask;
+    mask = _stack.back().else_mask & width_mask;
     _stack.back().is_part = 1;
   }
 }
@@ -1123,29 +1117,29 @@ void processor_t::gpgpu_unit_t::simt_stack_t::push_branch
     (reg_t if_pc, uint64_t if_mask, 
                      uint64_t r_mask, reg_t else_pc, uint64_t else_mask)
 {
-  if(else_mask == 0){ 
+  if(all_zero(else_mask)){ 
     //不用执行else，pair=1和is_part=1
     //pair:else路径掩码是否为0
     //is_part选择输出栈顶 0:else路径信息, 1:汇合点
     simt_stack_entry_t new_entry(1, NO_PC, r_mask, else_pc, else_mask, 1);
     _stack.push_back(new_entry);
     npc = if_pc;
-    mask = if_mask;
+    mask = if_mask & width_mask;
   }
-  else if(if_mask == 0){
+  else if(all_zero(if_mask)){
     //不用执行if但要执行else，pair=0和is_part=1
     //is_part选择输出栈顶 0:else路径信息, 1:汇合点
     simt_stack_entry_t new_entry(1, NO_PC, r_mask, else_pc, else_mask, 0);
     _stack.push_back(new_entry);
     npc = else_pc;
-    mask = else_mask;
+    mask = else_mask & width_mask;
   }
   else{
     //if,else 都要执行
     simt_stack_entry_t new_entry(0, NO_PC, r_mask, else_pc, else_mask, 0);
     _stack.push_back(new_entry);
     npc = if_pc;
-    mask = if_mask;
+    mask = if_mask & width_mask;
   }
 }
 
@@ -1168,57 +1162,6 @@ int processor_t::gpgpu_unit_t::simt_stack_t::size()
 void processor_t::gpgpu_unit_t::simt_stack_t::reset()
 {
   _stack.clear();
-  mask = 0xffffffffffffffff;
+  // mask = 0xffffffffffffffff;
+  init_mask(8);
 }
-
-void processor_t::gpgpu_unit_t::set_warp(warp_schedule *warp)
-{
-  w = warp;
-}
-void processor_t::gpgpu_unit_t::set_barrier_1()
-{
-  w->barriers[warp_id] = 1;
-}
-
-void processor_t::gpgpu_unit_t::set_barrier_0()
-{
-  if(w->barrier_counter < w->warp_number){
-    w->barrier_counter++;
-  }
-  else{
-    for(int i=0;i<w->warp_number;i++)
-      w->barriers[i] = 0;
-
-    w->barrier_counter=0;
-  }
-  
-}
-
-bool processor_t::gpgpu_unit_t::get_barrier()
-{
-  //算一下barrier是否为全1
-  w->is_all_true = true;
-  for(int i=0;i<w->warp_number; i++){
-    if(w->barriers[i]==0){
-      w->is_all_true = false;
-    }
-  }
-  return w->is_all_true;
-}
-
-void warp_schedule::init_warp(std::string s)
-  {
-      std::string delim = " ";
-      std::vector<std::string> words{};
-
-      size_t pos = 0;
-      while ((pos = s.find(delim)) != std::string::npos) {
-          words.push_back(s.substr(0, pos));
-          s.erase(0, pos + delim.length());
-      }
-      warp_number = std::stoi(words[0]);
-      thread_number = std::stoi(words[1]);
-      barriers.resize(warp_number, 0);
-     
-
-  }
