@@ -7,7 +7,7 @@ SRC = $(TEST).s
 OBJ = $(TEST).o
 TARGET = $(TEST).riscv
 
-P ?= 4
+P ?= 1
 VARCH ?= vlen:256,elen:32
 DEBUG ?= -d
 ISA ?= rv64gv
