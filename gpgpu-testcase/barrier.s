@@ -29,7 +29,6 @@ LOOP:
 
 LOOP_END:
     barrier x0, x0, x0
-    endprg  x0, x0, x0
     j main_end
 
     
